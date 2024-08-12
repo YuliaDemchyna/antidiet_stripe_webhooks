@@ -4,6 +4,10 @@ import stripe
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail
+
+
 
 # Load environment variables from .env file
 load_dotenv()
@@ -15,11 +19,10 @@ stripe.api_key = os.getenv("STRIPE_API_KEY")
 # This is your Stripe CLI webhook secret for testing your endpoint locally.
 endpoint_secret = os.getenv("STRIPE_ENDPOINT_SECRET")
 
-#about the company and product
-article_number = os.getenv('ARTIKEL_NR')
-item_name = os.getenv('VARE_NAVN')
-item_quantity = os.getenv('VARE_ANTALL')
-organization_number = os.getenv('ORGANISASJONSNUMMER')
+#about the product
+article_number = '44-5361-2'
+item_name = 'Withings Body Smart badrumsvåg med kroppsanalys, WiFi'
+item_quantity = 1
 
 app = FastAPI()
 
@@ -49,48 +52,65 @@ async def webhook(request: Request):
 
         customer_details = event['data']['object']['customer_details']
         address = customer_details['address']
-        email = customer_details['email']
-        phone = customer_details['phone']
-
-        # Formatting the address
-        formatted_address = f"{address['line1']}, {address['city']}, {address['state']}, {address['postal_code']}, {address['country']}"
-
-        # Print extracted information
-        # print("Delivery Address:", formatted_address)
-        # print("Email:", email)
-        # print("Phone:", phone if phone else "No phone number provided")
 
         email_body = f"""
-            Hei,
+        Hei, 
+        
+        Vi har en ny innkjøpsordre basert på vår nyligste kundeaktivitet. 
+        
+        Her er detaljene for bestillingen: 
+        * Artikkel-nr: {article_number}
+        * Artikelnavn: {item_name}
+        * Antall: {item_quantity}
+        
+        Leveringsaddresse: 
+        * {customer_details['name']}
+        * E-post: {customer_details['email']}
+        * Telefon: {customer_details['phone'] if customer_details['phone'] else 'Ikke oppgitt'}
+        * {address['line1']}
+        * {address['postal_code']} {address['city']}
+        * {address['country']}
+        
+        Faktureres til: 
+        * Org.nr. 930688614 
+        * invoice@anti.diet 
+        * Selskapsnavn ANTI DIET AS 
+        
+        Ta gjerne kontakt hvis dere har spørsmål og oppgi vårt interne referansenummer: 
+        Kontaktperson: 
+        * Carl H.B. Haukås 
+        * Daglig leder | ANTIDIET 
+        * +47 40634490 
+        * carl@anti.diet 
+        
+        Takk for at dere er en super samarbeidspartner.
+        Med vennlig hilsen, 
+        Gjengen i ANTIDIET.
+        """
 
-            Følgende info for å sende inn en innkjøpsordre:
-
-            Artikkel-nr: {article_number}
-            Vare Navn: {item_name}
-            Antall: {item_quantity}
-
-            Leveringsadresse:
-            {address['line1']}
-            {address['line2']}
-            {address['postal_code']} {address['city']}
-            {address['country']}
-
-            Organisasjonsnummer det skal faktureres til:
-            {organization_number}
-
-            Kundeinformasjon:
-            E-post: {email}
-            Telefon: {phone}
-
-            Med vennlig hilsen,
-            ANTIDIET
-            """
-
-        print(email_body)
-        #TODO do sendgrid email sending
+        send_plain_text_email( os.environ.get('SENDGRID_API_KEY'),'yulia@anti.diet' , 'yuliademchyna@gmail.com', 'test email', email_body)
     else:
         print(f'Unhandled event type {event["type"]}')
 
-        #TODO good way to handle the failure?
-
     return JSONResponse(content={"success": True})
+
+
+#make all fields that are neccesary to order obligatory!! phone number?
+
+def send_plain_text_email(api_key, from_email, to_emails, subject, content):
+    message = Mail(
+        from_email=from_email,
+        to_emails=to_emails,
+        subject=subject,
+        plain_text_content=content
+    )
+
+    try:
+        sg = SendGridAPIClient(api_key)
+        response = sg.send(message)
+        print(f"Email sent successfully. Status Code: {response.status_code}")
+        print(f"Response Body: {response.body}")
+        print(f"Response Headers: {response.headers}")
+    except Exception as e:
+        print(f"An error occurred: {str(e)}")
+
